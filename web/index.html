@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ClearnerBot 遥控</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, "PingFang SC", sans-serif;
+    background: #1c1c1e; color: #fff; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    padding: 16px;
+  }
+  header { width: 100%; max-width: 480px; display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 18px; font-weight: 600; }
+  #conn { font-size: 13px; padding: 4px 10px; border-radius: 12px; background: #48484a; }
+  #conn.on { background: #30d158; color: #000; }
+  #arena {
+    position: relative; width: min(78vw, 320px); height: min(78vw, 320px);
+    margin: 32px 0; border-radius: 50%; background: #2c2c2e;
+    border: 2px solid #3a3a3c;
+  }
+  #stick {
+    position: absolute; width: 40%; height: 40%; border-radius: 50%;
+    background: #0a84ff; left: 30%; top: 30%;
+    box-shadow: 0 4px 16px rgba(10, 132, 255, .4);
+  }
+  .panel { width: 100%; max-width: 480px; background: #2c2c2e; border-radius: 16px; padding: 16px; }
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; font-size: 15px; }
+  .row label { flex: 1; }
+  .row output { width: 48px; text-align: right; color: #8e8e93; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 2; margin: 0 12px; accent-color: #0a84ff; }
+  button {
+    border: none; border-radius: 12px; padding: 12px 20px;
+    font-size: 15px; font-weight: 600; color: #fff; background: #0a84ff;
+  }
+  button.on { background: #ff9f0a; color: #000; }
+  #estop { background: #ff453a; width: 100%; margin-top: 12px; padding: 14px; font-size: 17px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ClearnerBot</h1>
+  <span id="conn">连接中…</span>
+</header>
+
+<div id="arena"><div id="stick"></div></div>
+
+<div class="panel">
+  <div class="row">
+    <label>往返巡逻</label>
+    <button id="patrolBtn">开启巡逻</button>
+  </div>
+  <div class="row">
+    <label>巡逻速度</label>
+    <input type="range" id="speed" min="0.1" max="1" step="0.05" value="0.5">
+    <output id="speedVal">0.50</output>
+  </div>
+  <div class="row">
+    <label>往返周期</label>
+    <input type="range" id="period" min="1" max="30" step="0.5" value="4">
+    <output id="periodVal">4.0s</output>
+  </div>
+</div>
+
+<button id="estop">急停</button>
+
+<script>
+"use strict";
+
+// ---- WebSocket:断线自动重连;指令走 ws://<host>/ws(协议 v1) ----
+let ws = null;
+let connected = false;
+const connEl = document.getElementById("conn");
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => setConn(true);
+  ws.onclose = () => { setConn(false); setTimeout(connect, 1000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "state") syncPatrolUI(msg.patrol);
+    } catch (_) { /* 忽略无法解析的消息 */ }
+  };
+}
+
+function setConn(ok) {
+  connected = ok;
+  connEl.textContent = ok ? "已连接" : "重连中…";
+  connEl.classList.toggle("on", ok);
+}
+
+function send(obj) {
+  if (connected && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+// ---- 虚拟摇杆:按住约 10Hz 连发 drive,松开发 drive(0,0) 即停 ----
+// 坐标映射:上 = 前进(vx 正);左 = 左转(wz 正,协议约定 wz 正=左转)
+const arena = document.getElementById("arena");
+const stick = document.getElementById("stick");
+let vx = 0, wz = 0, tracking = false, sendTimer = null;
+
+function onMove(e) {
+  if (!tracking) return;
+  const rect = arena.getBoundingClientRect();
+  const radius = rect.width / 2;
+  // 相对圆心偏移,截断到圆内
+  let dx = e.clientX - (rect.left + radius);
+  let dy = e.clientY - (rect.top + radius);
+  const dist = Math.hypot(dx, dy);
+  if (dist > radius) { dx = dx / dist * radius; dy = dy / dist * radius; }
+  stick.style.left = `${30 + dx / rect.width * 100}%`;
+  stick.style.top = `${30 + dy / rect.height * 100}%`;
+  vx = -dy / radius;   // 上为负 dy → vx 正
+  wz = -dx / radius;   // 右为正 dx → wz 负(右转)
+}
+
+function startTrack(e) {
+  tracking = true;
+  onMove(e);
+  sendDrive();
+  sendTimer = setInterval(sendDrive, 100);
+}
+
+function endTrack() {
+  if (!tracking) return;
+  tracking = false;
+  clearInterval(sendTimer);
+  vx = 0; wz = 0;
+  stick.style.left = "30%"; stick.style.top = "30%";
+  send({ type: "drive", vx: 0, wz: 0 });  // 松手即停
+}
+
+function sendDrive() {
+  send({ type: "drive", vx: +vx.toFixed(3), wz: +wz.toFixed(3) });
+}
+
+arena.addEventListener("pointerdown", (e) => { arena.setPointerCapture(e.pointerId); startTrack(e); });
+arena.addEventListener("pointermove", onMove);
+arena.addEventListener("pointerup", endTrack);
+arena.addEventListener("pointercancel", endTrack);
+
+// ---- 巡逻控制 ----
+const patrolBtn = document.getElementById("patrolBtn");
+const speedEl = document.getElementById("speed");
+const periodEl = document.getElementById("period");
+let patrolOn = false;
+
+function syncPatrolUI(on) {
+  patrolOn = on;
+  patrolBtn.textContent = on ? "停止巡逻" : "开启巡逻";
+  patrolBtn.classList.toggle("on", on);
+}
+
+patrolBtn.addEventListener("click", () => {
+  if (patrolOn) {
+    send({ type: "patrol", on: false });
+  } else {
+    send({ type: "patrol", on: true, speed: +speedEl.value, period: +periodEl.value });
+  }
+});
+
+speedEl.addEventListener("input", () => speedVal.textContent = (+speedEl.value).toFixed(2));
+periodEl.addEventListener("input", () => periodVal.textContent = `${(+periodEl.value).toFixed(1)}s`);
+
+document.getElementById("estop").addEventListener("click", () => send({ type: "stop" }));
+
+connect();
+</script>
+</body>
+</html>
