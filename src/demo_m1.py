@@ -10,6 +10,8 @@ from src.platforms import create_drivetrain
 
 SPEED = 0.4  # 低速验证,防止意外冲出
 
+log = logging.getLogger("demo_m1")
+
 # (说明, (左轮, 右轮), 持续秒数);原地自旋 = 左右轮等速反向
 STEPS = [
     ("前进", (SPEED, SPEED), 2.0),
@@ -23,12 +25,12 @@ def main():
     try:
         with create_drivetrain() as drivetrain:
             for label, (left, right), seconds in STEPS:
-                print(label)
+                log.info(label)
                 drivetrain.set_speeds(left, right)
                 time.sleep(seconds)
-            print("停止")
+            log.info("停止")
     except KeyboardInterrupt:
-        print("已中断,电机停止")
+        log.info("已中断,电机停止")
 
 
 if __name__ == "__main__":
