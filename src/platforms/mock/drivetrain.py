@@ -11,14 +11,11 @@ class MockDrivetrain(Drivetrain):
     def __init__(self):
         self.calls = []
 
-    def set_speeds(self, left, right):
-        state = (round(float(left), 3), round(float(right), 3))
+    def _write_motors(self, left, right):
+        state = (round(left, 3), round(right, 3))
         if not self.calls or self.calls[-1] != state:
             log.info("motor left=%.2f right=%.2f", *state)
         self.calls.append(state)
-
-    def stop(self):
-        self.set_speeds(0.0, 0.0)
 
     def close(self):
         self.stop()
