@@ -13,6 +13,7 @@ _DEADZONE = 0.02  # 小于该占空比视为停止,避免微占空比下电机�
 
 class RaspberryPiDrivetrain(Drivetrain):
     def __init__(self):
+        self._closed = False
         self._standby = DigitalOutputDevice(pins.STBY)
         self._pwm_l = PWMOutputDevice(pins.PWMA, frequency=PWM_FREQUENCY)
         self._in1_l = DigitalOutputDevice(pins.AIN1)
@@ -48,6 +49,9 @@ class RaspberryPiDrivetrain(Drivetrain):
         self.set_speeds(0.0, 0.0)
 
     def close(self):
+        if self._closed:  # 幂等:允许 finally / with 中重复调用
+            return
+        self._closed = True
         self.stop()
         self._standby.off()  # 拉低使能,切断电机供电,防止退出后电机保持状态
         for dev in (
