@@ -14,12 +14,14 @@ class RaspberryPiDrivetrain(Drivetrain):
     def __init__(self):
         self._closed = False
         self._standby = DigitalOutputDevice(pins.STBY)
-        self._pwm_l = PWMOutputDevice(pins.PWMA, frequency=PWM_FREQUENCY)
-        self._in1_l = DigitalOutputDevice(pins.AIN1)
-        self._in2_l = DigitalOutputDevice(pins.AIN2)
-        self._pwm_r = PWMOutputDevice(pins.PWMB, frequency=PWM_FREQUENCY)
-        self._in1_r = DigitalOutputDevice(pins.BIN1)
-        self._in2_r = DigitalOutputDevice(pins.BIN2)
+        # 实物接线:B 通道接左轮、A 通道接右轮(2026-10-01 分通道测试实测),
+        # 逻辑左/右在此映射到物理通道,与《硬件选型与BOM.md》§4 的原始假设相反
+        self._pwm_l = PWMOutputDevice(pins.PWMB, frequency=PWM_FREQUENCY)
+        self._in1_l = DigitalOutputDevice(pins.BIN1)
+        self._in2_l = DigitalOutputDevice(pins.BIN2)
+        self._pwm_r = PWMOutputDevice(pins.PWMA, frequency=PWM_FREQUENCY)
+        self._in1_r = DigitalOutputDevice(pins.AIN1)
+        self._in2_r = DigitalOutputDevice(pins.AIN2)
         self._standby.on()
         log.info("TB6612 已使能(STBY=GPIO%d)", pins.STBY)
 
