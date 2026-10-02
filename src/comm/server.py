@@ -19,14 +19,16 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse
 
 from ..core.motion import mix
+from ..core.odometry import Odometry, OdometryParams
 from ..core.patrol import Patrol
 from ..core.safety import Watchdog
-from ..platforms import create_drivetrain
+from ..platforms import create_drivetrain, create_encoders
 from . import protocol
 
 log = logging.getLogger(__name__)
 
 WEB_INDEX = Path(__file__).resolve().parents[2] / "web" / "index.html"
+CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "calibration.json"
 CONTROL_LOOP_INTERVAL = 0.05  # 控制循环节拍,秒
 
 
@@ -35,17 +37,20 @@ def _platform_name(drivetrain):
     return type(drivetrain).__module__.split(".")[-2]
 
 
-def create_app(drivetrain=None, patrol=None, watchdog=None):
+def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None, odometry=None):
     """组装应用。缺省自动探测平台;测试时注入 mock 底盘/假时钟组件。"""
     drivetrain = drivetrain or create_drivetrain()
     patrol = patrol or Patrol(drivetrain)
     watchdog = watchdog or Watchdog(drivetrain)
+    encoders = encoders or create_encoders(drivetrain)
+    odometry = odometry or Odometry(OdometryParams.load(CALIBRATION_PATH))
 
     def state():
         return {
             "type": "state",
             "patrol": patrol.active,
             "platform": _platform_name(drivetrain),
+            "odom": odometry.as_dict(),
         }
 
     def handle_drive(msg):
@@ -74,6 +79,7 @@ def create_app(drivetrain=None, patrol=None, watchdog=None):
             if patrol.active:
                 watchdog.feed()  # 巡逻期间电机在执行有意指令,看门狗不触发
             watchdog.check()
+            odometry.update(*encoders.read())  # 50ms 节拍积分里程计
             await asyncio.sleep(CONTROL_LOOP_INTERVAL)
 
     @asynccontextmanager
@@ -84,6 +90,7 @@ def create_app(drivetrain=None, patrol=None, watchdog=None):
         finally:
             task.cancel()
             drivetrain.close()  # 退出(含异常)释放 GPIO
+            encoders.close()
 
     app = FastAPI(lifespan=lifespan)
 

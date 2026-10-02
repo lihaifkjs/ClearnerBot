@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from src.comm.server import create_app
 from src.platforms.mock.drivetrain import MockDrivetrain
 
+ODOM_ZERO = {"x": 0.0, "y": 0.0, "theta": 0.0, "vx": 0.0, "wz": 0.0}
+
 
 @pytest.fixture
 def drivetrain():
@@ -26,13 +28,16 @@ def test_index_serves_h5(client):
 
 def test_status_endpoint(client):
     resp = client.get("/api/status")
-    assert resp.json() == {"type": "state", "patrol": False, "platform": "mock"}
+    assert resp.json() == {"type": "state", "patrol": False, "platform": "mock",
+                           "odom": ODOM_ZERO}
 
 
 def test_ws_drive_moves_motors_and_acks(client, drivetrain):
     with client.websocket_connect("/ws") as ws:
         ws.send_text('{"type": "drive", "vx": 0.5, "wz": 0}')
-        assert ws.receive_json() == {"type": "state", "patrol": False, "platform": "mock"}
+        ack = ws.receive_json()
+        assert ack == {"type": "state", "patrol": False, "platform": "mock",
+                       "odom": ODOM_ZERO}
     assert (0.5, 0.5) in drivetrain.calls
 
 
