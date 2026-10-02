@@ -17,11 +17,16 @@ class Drivetrain(ABC):
 
     子类只需实现 _write_motors() 与 close();set_speeds()/stop() 由基类
     提供,截断与死区统一在此处理,保证各平台行为一致。
+
+    last_command 记录最近一次归一化后的指令,mock 编码器据此仿真车轮转动。
     """
+
+    last_command = (0.0, 0.0)
 
     def set_speeds(self, left: float, right: float) -> None:
         """设置左右轮占空比(截断到 [-1,1],死区内归零)"""
-        self._write_motors(normalize_duty(left), normalize_duty(right))
+        self.last_command = (normalize_duty(left), normalize_duty(right))
+        self._write_motors(*self.last_command)
 
     @abstractmethod
     def _write_motors(self, left: float, right: float) -> None:
@@ -34,6 +39,33 @@ class Drivetrain(ABC):
     @abstractmethod
     def close(self) -> None:
         """停车并释放 GPIO 资源;程序退出(含异常)时必须被调用"""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
+
+class Encoders(ABC):
+    """编码器接口,与 Drivetrain 同层的平台抽象(M5 里程计)。
+
+    read() 返回左右轮累计有符号 tick 数,正 = 车轮向"前进"方向旋转;
+    A/B 相接反、左右装反等接线问题在各平台实现内用符号常数修正,
+    上层(core/odometry)只认本约定。
+    """
+
+    @abstractmethod
+    def read(self) -> tuple:
+        """读取左右轮累计 tick 数 (left, right),int,可正可负"""
+
+    @abstractmethod
+    def reset(self) -> None:
+        """计数清零(里程计本身另有基线,互不影响)"""
+
+    @abstractmethod
+    def close(self) -> None:
+        """释放 GPIO 资源;必须幂等,允许 finally / with 中重复调用"""
 
     def __enter__(self):
         return self
