@@ -42,12 +42,15 @@ def encoders():
 
 
 def test_forward_cycle_counts_4x(encoders):
+    # 同一段引脚序列经符号常数映射:计数 = 4 × 该轮 SIGN
+    # (右轮实物接线反向,RIGHT_SIGN=-1,故同序列计为负,见 encoders.py 注释)
+    ls, rs = 4 * rpi_enc.LEFT_SIGN, 4 * rpi_enc.RIGHT_SIGN
     _drive_cycle(pins.ENC_LEFT_A, pins.ENC_LEFT_B)
-    assert encoders.read() == (4, 0)
+    assert encoders.read() == (ls, 0)
     _drive_cycle(pins.ENC_RIGHT_A, pins.ENC_RIGHT_B)
-    assert encoders.read() == (4, 4)
-    _drive_cycle(pins.ENC_LEFT_A, pins.ENC_LEFT_B)  # 每周期恰好 +4
-    assert encoders.read() == (8, 4)
+    assert encoders.read() == (ls, rs)
+    _drive_cycle(pins.ENC_LEFT_A, pins.ENC_LEFT_B)  # 每周期恰好 ±4
+    assert encoders.read() == (2 * ls, rs)
 
 
 def test_reverse_cycle_counts_negative(encoders):
@@ -74,7 +77,7 @@ def test_sign_constants_fix_wiring(monkeypatch):
         _drive_cycle(pins.ENC_LEFT_A, pins.ENC_LEFT_B)
         assert enc.read() == (-4, 0)
         _drive_cycle(pins.ENC_RIGHT_A, pins.ENC_RIGHT_B)  # 右轮不受影响
-        assert enc.read() == (-4, 4)
+        assert enc.read() == (-4, 4 * rpi_enc.RIGHT_SIGN)
     finally:
         enc.close()
 

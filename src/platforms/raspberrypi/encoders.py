@@ -12,8 +12,9 @@ from . import pins
 
 # 接线修正:A/B 相接反或左右装反时,只改这两个符号,不动接线
 # (先例:TB6612 左右轮通道对调在 drivetrain.py 内修正)
+# 2026-10-03 真机实测:左轮向前转为正(+);右轮向前转为负,故 RIGHT_SIGN 取 -1
 LEFT_SIGN = +1
-RIGHT_SIGN = +1
+RIGHT_SIGN = -1
 
 # 4x 正交解码状态转移表:索引 (prev << 2) | cur,prev/cur 为 (A<<1)|B 的 2bit 状态。
 # 正转序列 00→01→11→10→00,反转反之;每整周期 4 个沿 = 4 tick(4 倍频)。
