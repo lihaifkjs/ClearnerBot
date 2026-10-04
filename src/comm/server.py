@@ -8,6 +8,9 @@
 
 断连保护:WS 断开 → 停车并退出巡逻;控制循环以 50ms 节拍驱动
 巡逻 tick 与看门狗 check(远小于 0.5s 超时,保证停车及时)。
+
+ROS2 桥接(M4):嵌入本进程订阅 /cmd_vel,与 WS 的 drive 消息走同一条
+handle_drive 路径(手动优先退巡逻 + 喂看门狗);无 ROS 环境自动跳过。
 """
 import asyncio
 import json
@@ -24,6 +27,7 @@ from ..core.patrol import Patrol
 from ..core.safety import Watchdog
 from ..platforms import create_drivetrain, create_encoders
 from . import protocol
+from .ros_bridge import CmdVelBridge, RobotParams
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +41,8 @@ def _platform_name(drivetrain):
     return type(drivetrain).__module__.split(".")[-2]
 
 
-def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None, odometry=None):
+def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None,
+               odometry=None, bridge=None):
     """组装应用。缺省自动探测平台;测试时注入 mock 底盘/假时钟组件。"""
     drivetrain = drivetrain or create_drivetrain()
     patrol = patrol or Patrol(drivetrain)
@@ -73,6 +78,13 @@ def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None, odome
 
     dispatch = {"drive": handle_drive, "stop": handle_stop, "patrol": handle_patrol}
 
+    if bridge is None:
+        # /cmd_vel 与 WS 的 drive 消息同路径:手动优先退巡逻、喂看门狗
+        bridge = CmdVelBridge(
+            lambda vx, wz: handle_drive({"vx": vx, "wz": wz}),
+            RobotParams.load(),
+        )
+
     async def control_loop():
         while True:
             patrol.tick()
@@ -85,10 +97,12 @@ def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None, odome
     @asynccontextmanager
     async def lifespan(_app):
         task = asyncio.create_task(control_loop())
+        bridge.start()  # 无 ROS 环境时返回 False,不影响其余功能
         try:
             yield
         finally:
             task.cancel()
+            bridge.stop()
             drivetrain.close()  # 退出(含异常)释放 GPIO
             encoders.close()
 
