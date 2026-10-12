@@ -2,4 +2,6 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 calibration.json
+maps/
