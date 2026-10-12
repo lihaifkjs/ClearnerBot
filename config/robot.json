@@ -1,4 +1,11 @@
 {
   "max_linear_speed_mps": 0.5,
-  "max_angular_speed_radps": 7.0
+  "max_angular_speed_radps": 7.0,
+  "laser_tf": {
+    "x": 0.025,
+    "y": 0.0,
+    "z": 0.05,
+    "yaw": -1.5708,
+    "_comment": "base_link→laser_link 静态 TF(米/弧度);由命令行 static_transform_publisher 使用,代码不消费。2026-10-12 雷达重新固定后实测 x/z;yaw=-π/2 经两次差分标定验证(车头目标读 ~95°)"
+  }
 }

@@ -1,0 +1,11 @@
+# M7 建图:slam_toolbox online_async 最小配置(见 M7 建图.md §4.3)
+# 启动:ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file config/slam_toolbox.yaml
+slam_toolbox:
+  ros__parameters:
+    odom_frame: odom
+    base_frame: base_link
+    map_frame: map
+    scan_topic: /scan
+    mode: mapping
+    resolution: 0.05
+    max_laser_range: 8.0  # LD06 标称 12m,远点噪声大,先收 8m
