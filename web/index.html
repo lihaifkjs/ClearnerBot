@@ -50,6 +50,11 @@
 
 <div class="panel">
   <div class="row">
+    <label>速度倍率</label>
+    <input type="range" id="rate" min="0.1" max="1" step="0.05" value="1">
+    <output id="rateVal">1.00×</output>
+  </div>
+  <div class="row">
     <label>往返巡逻</label>
     <button id="patrolBtn">开启巡逻</button>
   </div>
@@ -136,7 +141,9 @@ function endTrack() {
 }
 
 function sendDrive() {
-  send({ type: "drive", vx: +vx.toFixed(3), wz: +wz.toFixed(3) });
+  // 速度倍率:仅作用于手动摇杆,巡逻速度不受影响
+  const r = +rateEl.value;
+  send({ type: "drive", vx: +(vx * r).toFixed(3), wz: +(wz * r).toFixed(3) });
 }
 
 arena.addEventListener("pointerdown", (e) => { arena.setPointerCapture(e.pointerId); startTrack(e); });
@@ -163,6 +170,9 @@ patrolBtn.addEventListener("click", () => {
     send({ type: "patrol", on: true, speed: +speedEl.value, period: +periodEl.value });
   }
 });
+
+const rateEl = document.getElementById("rate");
+rateEl.addEventListener("input", () => rateVal.textContent = `${(+rateEl.value).toFixed(2)}×`);
 
 speedEl.addEventListener("input", () => speedVal.textContent = (+speedEl.value).toFixed(2));
 periodEl.addEventListener("input", () => periodVal.textContent = `${(+periodEl.value).toFixed(1)}s`);
