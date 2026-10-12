@@ -79,10 +79,12 @@ def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None,
     dispatch = {"drive": handle_drive, "stop": handle_stop, "patrol": handle_patrol}
 
     if bridge is None:
-        # /cmd_vel 与 WS 的 drive 消息同路径:手动优先退巡逻、喂看门狗
+        # /cmd_vel 与 WS 的 drive 消息同路径:手动优先退巡逻、喂看门狗;
+        # get_odom 注入后桥接同时承担 /odom + TF 发布(M7)
         bridge = CmdVelBridge(
             lambda vx, wz: handle_drive({"vx": vx, "wz": wz}),
             RobotParams.load(),
+            get_odom=odometry.as_dict,
         )
 
     async def control_loop():
@@ -92,6 +94,7 @@ def create_app(drivetrain=None, patrol=None, watchdog=None, encoders=None,
                 watchdog.feed()  # 巡逻期间电机在执行有意指令,看门狗不触发
             watchdog.check()
             odometry.update(*encoders.read())  # 50ms 节拍积分里程计
+            bridge.publish_odom()  # 同节拍发 /odom + TF(约 20Hz)
             await asyncio.sleep(CONTROL_LOOP_INTERVAL)
 
     @asynccontextmanager
